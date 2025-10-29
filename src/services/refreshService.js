@@ -17,8 +17,12 @@ async function refreshCountries() {
   try {
     // Fetch countries & exchange rates in parallel
     const [countryRes, exchangeRes] = await Promise.all([
-      axios.get(COUNTRIES_API),
-      axios.get(EXCHANGE_API),
+      axios.get(COUNTRIES_API).catch((err) => {
+        throw new Error("Countries API fetch failed: " + err.message);
+      }),
+      axios.get(EXCHANGE_API).catch((err) => {
+        throw new Error("Exchange rates API fetch failed: " + err.message);
+      }),
     ]);
 
     const countries = countryRes.data;
@@ -60,7 +64,8 @@ async function refreshCountries() {
     };
   } catch (err) {
     console.error("Refresh error:", err.message);
-    throw new Error("External API failed");
+    // Throw consistent error for /refresh endpoint
+    throw new Error("External data source unavailable: " + err.message);
   }
 }
 

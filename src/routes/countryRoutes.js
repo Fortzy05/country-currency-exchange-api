@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
+const { Op } = require("sequelize");
 
 const Country = require("../models/country");
 const { refreshCountries } = require("../services/refreshService");
@@ -18,7 +19,29 @@ router.post("/refresh", async (req, res) => {
     res.status(503).json({
       success: false,
       error: "Failed to refresh countries. External data source unavailable.",
+      details: err.message,
     });
+  }
+});
+
+/**
+ * GET /countries/image
+ * Serve the summary image generated after refresh
+ * This route must be before /:name to avoid being captured by it
+ */
+router.get("/image", (req, res) => {
+  try {
+    const path = "./cache/summary.png";
+    if (!fs.existsSync(path))
+      return res
+        .status(404)
+        .json({ success: false, error: "Summary image not found" });
+    res.sendFile(path, { root: "." });
+  } catch (err) {
+    console.error("Image fetch error:", err.message);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch summary image" });
   }
 });
 
@@ -34,8 +57,8 @@ router.get("/", async (req, res) => {
   try {
     const { region, currency, sort } = req.query;
     const where = {};
-    if (region) where.region = region;
-    if (currency) where.currency_code = currency;
+    if (region) where.region = { [Op.iLike]: region };
+    if (currency) where.currency_code = { [Op.iLike]: currency };
 
     const order = [];
     if (sort === "gdp_desc") order.push(["estimated_gdp", "DESC"]);
@@ -57,7 +80,9 @@ router.get("/", async (req, res) => {
  */
 router.get("/:name", async (req, res) => {
   try {
-    const country = await Country.findOne({ where: { name: req.params.name } });
+    const country = await Country.findOne({
+      where: { name: { [Op.iLike]: req.params.name } },
+    });
     if (!country)
       return res
         .status(404)
@@ -75,7 +100,9 @@ router.get("/:name", async (req, res) => {
  */
 router.delete("/:name", async (req, res) => {
   try {
-    const country = await Country.findOne({ where: { name: req.params.name } });
+    const country = await Country.findOne({
+      where: { name: { [Op.iLike]: req.params.name } },
+    });
     if (!country)
       return res
         .status(404)
@@ -85,26 +112,6 @@ router.delete("/:name", async (req, res) => {
   } catch (err) {
     console.error("Delete country error:", err.message);
     res.status(500).json({ success: false, error: "Failed to delete country" });
-  }
-});
-
-/**
- * GET /countries/image
- * Serve the summary image generated after refresh
- */
-router.get("/image", (req, res) => {
-  try {
-    const path = "./cache/summary.png";
-    if (!fs.existsSync(path))
-      return res
-        .status(404)
-        .json({ success: false, error: "Summary image not found" });
-    res.sendFile(path, { root: "." });
-  } catch (err) {
-    console.error("Image fetch error:", err.message);
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to fetch summary image" });
   }
 });
 
